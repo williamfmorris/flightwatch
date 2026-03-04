@@ -4,7 +4,7 @@
   "description": "FlightWatch — Air Canada delay watchdog",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "npm run build && node server.js",
     "build": "vite build",
     "dev": "nodemon server.js",
     "dev:ui": "vite"
