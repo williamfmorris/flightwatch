@@ -41,33 +41,31 @@ function trackApiCall(endpoint) {
   return true;
 }
 
-// IATA airline code → ICAO airline code mapping
-const IATA_TO_ICAO = { AC: "ACA" }; // Air Canada
-
-function toIcaoIdent(flightNumber) {
-  const f = flightNumber.trim().toUpperCase();
-  for (const [iata, icao] of Object.entries(IATA_TO_ICAO)) {
-    if (f.startsWith(iata) && !f.startsWith(icao)) {
-      return icao + f.slice(iata.length);
-    }
-  }
-  return f;
-}
+// AC flights can be operated by mainline (ACA), Rouge (ROU), or Jazz/Express (JZA)
+const AC_ICAO_CANDIDATES = ["ACA", "ROU", "JZA"];
 
 async function getFlightInfo(flightNumber, date) {
-  const icao = toIcaoIdent(flightNumber);
-  if (!trackApiCall(`/flights/${icao}`)) throw new Error("Budget limit reached");
-  console.log(`[API] Fetching ${icao} (from ${flightNumber}) for ${date} with key ${FLIGHTAWARE_API_KEY ? FLIGHTAWARE_API_KEY.slice(0,6) + '...' : 'MISSING'}`);
-  // Use Eastern Time boundaries: 05:00Z = midnight EST (UTC-5), covering all ET departures on the given calendar date
+  const f = flightNumber.trim().toUpperCase();
+  // Build list of idents to try: if it looks like an IATA AC flight, try all AC operators
+  const flightNum = f.replace(/^(ACA|ROU|JZA|AC)/, "");
+  const candidates = f.startsWith("AC") && !f.match(/^(ACA|ROU|JZA)/)
+    ? AC_ICAO_CANDIDATES.map(prefix => prefix + flightNum)
+    : [f];
+
   const startET = new Date(date + 'T05:00:00Z');
   const endET   = new Date(startET.getTime() + 86400000);
-  const response = await axios.get(`${FLIGHTAWARE_BASE}/flights/${icao}`, {
-    headers: { "x-apikey": FLIGHTAWARE_API_KEY },
-    params: { start: startET.toISOString(), end: endET.toISOString() }
-  });
-  const flights = response.data.flights || [];
-  if (!flights.length) throw new Error(`No flights found for ${flightNumber} on ${date}`);
-  return flights[0];
+
+  for (const icao of candidates) {
+    if (!trackApiCall(`/flights/${icao}`)) throw new Error("Budget limit reached");
+    console.log(`[API] Trying ${icao} for ${date}`);
+    const response = await axios.get(`${FLIGHTAWARE_BASE}/flights/${icao}`, {
+      headers: { "x-apikey": FLIGHTAWARE_API_KEY },
+      params: { start: startET.toISOString(), end: endET.toISOString() }
+    });
+    const flights = response.data.flights || [];
+    if (flights.length) return flights[0];
+  }
+  throw new Error(`No flights found for ${flightNumber} on ${date}`);
 }
 
 async function getInboundFlight(inboundFaFlightId) {
