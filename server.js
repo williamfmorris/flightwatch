@@ -4,6 +4,7 @@ const express = require("express");
 const axios = require("axios");
 const cors = require("cors");
 const cron = require("node-cron");
+const path = require("path");
 
 const app = express();
 app.use(cors());
@@ -201,6 +202,11 @@ app.get("/api/budget", (req, res) => {
 app.get("/health", (req, res) => {
   res.json({ status: "ok", apiCallCount, activeWatches: watchedFlights.size });
 });
+
+// Serve React frontend
+const distPath = path.join(__dirname, "dist");
+app.use(express.static(distPath));
+app.get("*", (req, res) => res.sendFile(path.join(distPath, "index.html")));
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`FlightWatch server running on port ${PORT}`));
