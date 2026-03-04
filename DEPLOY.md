@@ -61,7 +61,7 @@ http://localhost:3001/api/flight/AC123?date=2024-03-15
 4. In Railway dashboard, go to your project → Variables tab
 5. Add these environment variables (this keeps your keys safe):
    ```
-   FLIGHTAWARE_API_KEY = XcghvOCDfYAi0qbh14KtBuqCRoqLZlDg
+   FLIGHTAWARE_API_KEY = your_key_here
    TWILIO_SID = (add when ready)
    TWILIO_TOKEN = (add when ready)
    TWILIO_FROM = (add when ready)
