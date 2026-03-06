@@ -116,7 +116,7 @@ function FlightCard({ data, onWatch }) {
           </div>
           <div style={{ padding: "10px 16px", background: "rgba(255,255,255,0.03)", borderRadius: 8, flex: 1, minWidth: 120 }}>
             <div style={{ fontSize: 10, color: "#555", letterSpacing: 1 }}>TURNAROUND NEEDED</div>
-            <div style={{ fontSize: 20, fontWeight: 800, fontFamily: "monospace", color: "#ddd", marginTop: 2 }}>60m</div>
+            <div style={{ fontSize: 20, fontWeight: 800, fontFamily: "monospace", color: "#ddd", marginTop: 2 }}>{data.analysis?.turnaroundMinutes ?? 60}m</div>
           </div>
           <div style={{ padding: "10px 16px", background: "rgba(255,255,255,0.03)", borderRadius: 8, flex: 1, minWidth: 120, border: `1px solid ${cfg.color}33` }}>
             <div style={{ fontSize: 10, color: "#555", letterSpacing: 1 }}>BUFFER</div>

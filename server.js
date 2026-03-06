@@ -19,6 +19,7 @@ const TWILIO_FROM = process.env.TWILIO_FROM;
 const BUDGET_LIMIT = 2000;
 const REVIEW_WARNING = 1500;
 const TURNAROUND_MINUTES = 60;
+const TURNAROUND_OVERRIDES = { YTZ: 30 };
 
 let apiCallCount = 0;
 let apiCallLog = [];
@@ -79,10 +80,12 @@ async function getInboundFlight(inboundFaFlightId) {
 
 function analyzeRisk(flight, inbound) {
   if (!inbound) return { risk: "unknown", message: "Could not determine inbound flight" };
+  const origin = flight.origin?.code_iata;
+  const turnaround = TURNAROUND_OVERRIDES[origin] ?? TURNAROUND_MINUTES;
   const scheduledDep = new Date(flight.scheduled_out);
   const estimatedArr = new Date(inbound.estimated_in || inbound.scheduled_in);
   const gapMinutes = (scheduledDep - estimatedArr) / 60000;
-  const bufferMinutes = gapMinutes - TURNAROUND_MINUTES;
+  const bufferMinutes = gapMinutes - turnaround;
   let risk, message;
   if (bufferMinutes >= 15) {
     risk = "safe";
@@ -92,9 +95,9 @@ function analyzeRisk(flight, inbound) {
     message = `Inbound ${inbound.ident} arrives ${formatTime(estimatedArr)}. Only ${Math.round(bufferMinutes)} min buffer — could be tight.`;
   } else {
     risk = "delay_likely";
-    message = `DELAY LIKELY: Inbound ${inbound.ident} arrives ${formatTime(estimatedArr)}, only ${Math.round(gapMinutes)} min before departure — not enough for ${TURNAROUND_MINUTES} min turnaround.`;
+    message = `DELAY LIKELY: Inbound ${inbound.ident} arrives ${formatTime(estimatedArr)}, only ${Math.round(gapMinutes)} min before departure — not enough for ${turnaround} min turnaround.`;
   }
-  return { risk, message, gapMinutes: Math.round(gapMinutes), bufferMinutes: Math.round(bufferMinutes), inboundETA: estimatedArr.toISOString() };
+  return { risk, message, gapMinutes: Math.round(gapMinutes), bufferMinutes: Math.round(bufferMinutes), turnaroundMinutes: turnaround, inboundETA: estimatedArr.toISOString() };
 }
 
 function formatTime(date) {
