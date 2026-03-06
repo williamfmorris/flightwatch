@@ -157,7 +157,27 @@ app.post("/api/watch", async (req, res) => {
     const watchId = `${flightNumber}-${date}-${Date.now()}`;
     watchedFlights.set(watchId, { flightNumber, date, phone, lastRisk: null, startedAt: new Date().toISOString() });
     const result = await checkFlight(flightNumber.toUpperCase(), date, phone, watchId);
-    const job = cron.schedule("*/5 * * * *", async () => { await checkFlight(flightNumber.toUpperCase(), date, phone, watchId); });
+    let consecutiveErrors = 0;
+    const job = cron.schedule("*/5 * * * *", async () => {
+      // Stop if the flight date is more than 12 hours in the past
+      const flightDateEnd = new Date(date + 'T12:00:00Z').getTime() + 86400000;
+      if (Date.now() > flightDateEnd) {
+        console.log(`[Watch] ${flightNumber} date ${date} has passed — stopping watch`);
+        job.stop(); activeCronJobs.delete(watchId); watchedFlights.delete(watchId);
+        return;
+      }
+      try {
+        await checkFlight(flightNumber.toUpperCase(), date, phone, watchId);
+        consecutiveErrors = 0;
+      } catch (err) {
+        consecutiveErrors++;
+        console.error(`[Poll] Error (${consecutiveErrors}):`, err.message);
+        if (consecutiveErrors >= 5) {
+          console.error(`[Watch] ${flightNumber} — 5 consecutive errors, stopping watch`);
+          job.stop(); activeCronJobs.delete(watchId); watchedFlights.delete(watchId);
+        }
+      }
+    });
     activeCronJobs.set(watchId, job);
     if (phone) await sendSMS(phone, `FlightWatch activated for ${flightNumber} on ${date}. You'll get alerts if a delay is likely.`);
     res.json({ success: true, watchId, ...result });
