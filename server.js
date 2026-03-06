@@ -18,8 +18,23 @@ const TWILIO_FROM = process.env.TWILIO_FROM;
 
 const BUDGET_LIMIT = 2000;
 const REVIEW_WARNING = 1500;
-const TURNAROUND_MINUTES = 60;
-const TURNAROUND_OVERRIDES = { YTZ: 30 };
+const TURNAROUND_MINUTES = 60; // default
+
+// Turnaround by aircraft type (ICAO type codes)
+const TURNAROUND_BY_AIRCRAFT = {
+  // Turboprops / regional jets — 30 min
+  DH8A: 30, DH8B: 30, DH8C: 30, DH8D: 30, // Q100/200/300/400
+  CRJ1: 30, CRJ2: 30, CRJ7: 30, CRJ9: 30, CRJX: 30, // CRJ family
+  E135: 30, E145: 30, // Embraer regional
+  AT43: 30, AT72: 30, AT75: 30, // ATR family
+  // Narrowbody — 60 min (default, listed for clarity)
+  B737: 60, B738: 60, B739: 60, B38M: 60, B39M: 60,
+  A319: 60, A320: 60, A321: 60,
+  E170: 60, E175: 60, E190: 60, E195: 60,
+  // Widebody — 90 min
+  B763: 90, B764: 90, B77W: 90, B788: 90, B789: 90, B78X: 90,
+  A332: 90, A333: 90, A359: 90, A35K: 90,
+};
 
 let apiCallCount = 0;
 let apiCallLog = [];
@@ -80,8 +95,8 @@ async function getInboundFlight(inboundFaFlightId) {
 
 function analyzeRisk(flight, inbound) {
   if (!inbound) return { risk: "unknown", message: "Could not determine inbound flight" };
-  const origin = flight.origin?.code_iata;
-  const turnaround = TURNAROUND_OVERRIDES[origin] ?? TURNAROUND_MINUTES;
+  const aircraftType = flight.aircraft_type?.toUpperCase();
+  const turnaround = TURNAROUND_BY_AIRCRAFT[aircraftType] ?? TURNAROUND_MINUTES;
   const scheduledDep = new Date(flight.scheduled_out);
   const estimatedArr = new Date(inbound.estimated_in || inbound.scheduled_in);
   const gapMinutes = (scheduledDep - estimatedArr) / 60000;
