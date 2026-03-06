@@ -178,7 +178,7 @@ app.get("/api/flight/:flightNumber", async (req, res) => {
     let inbound = null;
     if (flight.inbound_fa_flight_id) inbound = await getInboundFlight(flight.inbound_fa_flight_id);
     const analysis = analyzeRisk(flight, inbound);
-    res.json({ success: true, flightNumber: flight.ident, route: `${flight.origin?.code_iata} → ${flight.destination?.code_iata}`, scheduledDeparture: flight.scheduled_out, estimatedDeparture: flight.estimated_out, actualDeparture: flight.actual_out, gate: flight.gate_origin, status: flight.status, inbound: inbound ? { flightNumber: inbound.ident, origin: inbound.origin?.code_iata, scheduledArrival: inbound.scheduled_in, estimatedArrival: inbound.estimated_in, actualArrival: inbound.actual_in, departed: !!inbound.actual_off, departedAt: inbound.actual_off, progressPercent: inbound.progress_percent } : null, analysis, apiCallCount, budgetRemaining: BUDGET_LIMIT - apiCallCount });
+    res.json({ success: true, flightNumber: flight.ident, route: `${flight.origin?.code_iata} → ${flight.destination?.code_iata}`, scheduledDeparture: flight.scheduled_out, estimatedDeparture: flight.estimated_out, actualDeparture: flight.actual_out, gate: flight.gate_origin, status: flight.status, timezone: flight.origin?.timezone, inbound: inbound ? { flightNumber: inbound.ident, origin: inbound.origin?.code_iata, scheduledArrival: inbound.scheduled_in, estimatedArrival: inbound.estimated_in, actualArrival: inbound.actual_in, departed: !!inbound.actual_off, departedAt: inbound.actual_off, progressPercent: inbound.progress_percent } : null, analysis, apiCallCount, budgetRemaining: BUDGET_LIMIT - apiCallCount });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

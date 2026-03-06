@@ -34,15 +34,16 @@ function ProgressBar({ value, color }) {
   );
 }
 
-function formatTime(isoString) {
+function formatTime(isoString, timezone = "America/Toronto") {
   if (!isoString) return "—";
-  return new Date(isoString).toLocaleTimeString("en-CA", { hour: "2-digit", minute: "2-digit", timeZone: "America/Toronto" });
+  return new Date(isoString).toLocaleTimeString("en-CA", { hour: "2-digit", minute: "2-digit", timeZone: timezone });
 }
 
 function FlightCard({ data, onWatch }) {
   const riskKey = getRiskLevel(data.analysis);
   const cfg = riskConfig[riskKey];
   const inb = data.inbound;
+  const tz = data.timezone || "America/Toronto";
 
   return (
     <div style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${cfg.color}33`, borderRadius: 12, padding: "24px 28px", marginTop: 24, position: "relative", overflow: "hidden", animation: "fadeIn 0.4s ease" }}>
@@ -56,9 +57,9 @@ function FlightCard({ data, onWatch }) {
             <span style={{ fontSize: 13, color: "#888", letterSpacing: 1 }}>{data.route}</span>
           </div>
           <div style={{ marginTop: 6, fontSize: 13, color: "#666" }}>
-            {data.gate ? `Gate ${data.gate} · ` : ""}Departs {formatTime(data.scheduledDeparture)}
+            {data.gate ? `Gate ${data.gate} · ` : ""}Departs {formatTime(data.scheduledDeparture, tz)}
             {data.estimatedDeparture && data.estimatedDeparture !== data.scheduledDeparture &&
-              <span style={{ color: "#f5c518", marginLeft: 8 }}>Est. {formatTime(data.estimatedDeparture)}</span>}
+              <span style={{ color: "#f5c518", marginLeft: 8 }}>Est. {formatTime(data.estimatedDeparture, tz)}</span>}
           </div>
         </div>
         <div style={{ textAlign: "right" }}>
@@ -84,18 +85,18 @@ function FlightCard({ data, onWatch }) {
           <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
             <div>
               <div style={{ fontSize: 10, color: "#555", letterSpacing: 1 }}>SCHED ARR</div>
-              <div style={{ fontSize: 14, color: "#aaa", fontFamily: "monospace", marginTop: 2 }}>{formatTime(inb.scheduledArrival)}</div>
+              <div style={{ fontSize: 14, color: "#aaa", fontFamily: "monospace", marginTop: 2 }}>{formatTime(inb.scheduledArrival, tz)}</div>
             </div>
             <div>
               <div style={{ fontSize: 10, color: "#555", letterSpacing: 1 }}>EST ARR</div>
               <div style={{ fontSize: 14, fontFamily: "monospace", marginTop: 2, color: inb.estimatedArrival !== inb.scheduledArrival ? "#f5c518" : "#00e5a0" }}>
-                {formatTime(inb.estimatedArrival || inb.scheduledArrival)}
+                {formatTime(inb.estimatedArrival || inb.scheduledArrival, tz)}
               </div>
             </div>
             <div>
               <div style={{ fontSize: 10, color: "#555", letterSpacing: 1 }}>DEPARTED</div>
               <div style={{ fontSize: 13, color: inb.departed ? "#00e5a0" : "#666", marginTop: 2, fontFamily: "monospace" }}>
-                {inb.departed ? formatTime(inb.departedAt) : "Not yet"}
+                {inb.departed ? formatTime(inb.departedAt, tz) : "Not yet"}
               </div>
             </div>
             <div>
@@ -169,8 +170,9 @@ function SMSModal({ flightData, onClose }) {
             <div style={{ fontSize: 22, fontWeight: 700, color: "#fff", marginBottom: 6 }}>{flightData.flightNumber}</div>
             <div style={{ fontSize: 13, color: "#666", marginBottom: 28, lineHeight: 1.6 }}>We'll check every 5 minutes and text you immediately if a delay becomes likely.</div>
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 11, letterSpacing: 2, color: "#555", marginBottom: 8 }}>YOUR PHONE NUMBER</div>
-              <input type="tel" placeholder="+1 (416) 555-0100" value={phone} onChange={e => setPhone(e.target.value)}
+              <div style={{ fontSize: 11, letterSpacing: 2, color: "#555", marginBottom: 4 }}>YOUR PHONE NUMBER</div>
+              <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>Include country code · North America: +1 416 555 0100 · UK: +44 7911 123456</div>
+              <input type="tel" placeholder="+1 416 555 0100" value={phone} onChange={e => setPhone(e.target.value)}
                 style={{ width: "100%", padding: "12px 16px", boxSizing: "border-box", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#fff", fontSize: 15, fontFamily: "monospace", outline: "none" }} />
             </div>
             {error && <div style={{ marginBottom: 12, fontSize: 12, color: "#ff4757" }}>{error}</div>}
