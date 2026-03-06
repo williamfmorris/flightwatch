@@ -16,7 +16,7 @@
     "express": "^4.18.2",
     "node-cron": "^3.0.3",
     "twilio": "^4.20.0",
-    "better-sqlite3": "^11.0.0"
+    "pg": "^8.12.0"
   },
   "overrides": {
     "rollup": "4.34.9"

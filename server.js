@@ -5,7 +5,7 @@ const axios = require("axios");
 const cors = require("cors");
 const cron = require("node-cron");
 const path = require("path");
-const Database = require("better-sqlite3");
+const { Pool } = require("pg");
 
 const app = express();
 app.use(cors());
@@ -38,31 +38,39 @@ const TURNAROUND_BY_AIRCRAFT = {
 };
 
 // --- Database setup ---
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, "flightwatch.db");
-const db = new Database(DB_PATH);
-db.exec(`
-  CREATE TABLE IF NOT EXISTS watches (
-    id TEXT PRIMARY KEY,
-    flight_number TEXT NOT NULL,
-    date TEXT NOT NULL,
-    phone TEXT,
-    last_risk TEXT,
-    started_at TEXT NOT NULL
-  )
-`);
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
+});
 
-function dbSaveWatch(watchId, { flightNumber, date, phone, lastRisk, startedAt }) {
-  db.prepare(`INSERT OR REPLACE INTO watches (id, flight_number, date, phone, last_risk, started_at)
-    VALUES (?, ?, ?, ?, ?, ?)`)
-    .run(watchId, flightNumber, date, phone || null, lastRisk || null, startedAt);
+async function initDB() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS watches (
+      id TEXT PRIMARY KEY,
+      flight_number TEXT NOT NULL,
+      date TEXT NOT NULL,
+      phone TEXT,
+      last_risk TEXT,
+      started_at TEXT NOT NULL
+    )
+  `);
 }
 
-function dbUpdateRisk(watchId, risk) {
-  db.prepare("UPDATE watches SET last_risk = ? WHERE id = ?").run(risk, watchId);
+async function dbSaveWatch(watchId, { flightNumber, date, phone, lastRisk, startedAt }) {
+  await pool.query(
+    `INSERT INTO watches (id, flight_number, date, phone, last_risk, started_at)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (id) DO UPDATE SET last_risk = EXCLUDED.last_risk`,
+    [watchId, flightNumber, date, phone || null, lastRisk || null, startedAt]
+  );
 }
 
-function dbDeleteWatch(watchId) {
-  db.prepare("DELETE FROM watches WHERE id = ?").run(watchId);
+async function dbUpdateRisk(watchId, risk) {
+  await pool.query("UPDATE watches SET last_risk = $1 WHERE id = $2", [risk, watchId]);
+}
+
+async function dbDeleteWatch(watchId) {
+  await pool.query("DELETE FROM watches WHERE id = $1", [watchId]);
 }
 
 // --- In-memory state ---
@@ -185,13 +193,13 @@ async function checkFlight(flightNumber, date, phone, watchId) {
     if (phone && watch && watch.lastRisk !== analysis.risk && (analysis.risk === "delay_likely" || analysis.risk === "tight")) {
       await sendSMS(phone, `FlightWatch: ${flightNumber} (${flight.origin?.code_iata}→${flight.destination?.code_iata}) ${analysis.message}`);
       watch.lastRisk = analysis.risk;
-      dbUpdateRisk(watchId, analysis.risk);
+      await dbUpdateRisk(watchId, analysis.risk);
     }
     if (flight.actual_off) {
       const job = activeCronJobs.get(watchId);
       if (job) { job.stop(); activeCronJobs.delete(watchId); }
       watchedFlights.delete(watchId);
-      dbDeleteWatch(watchId);
+      await dbDeleteWatch(watchId);
       if (phone) await sendSMS(phone, `FlightWatch: ${flightNumber} has departed. Safe travels!`);
     }
     return { flight, inbound, analysis, apiCallCount };
@@ -227,21 +235,25 @@ function startWatchJob(watchId, flightNumber, date, phone) {
 }
 
 // Restore watches from DB on startup
-function loadWatchesFromDB() {
-  const rows = db.prepare("SELECT * FROM watches").all();
-  let restored = 0;
-  for (const row of rows) {
-    const flightDateEnd = new Date(row.date + 'T12:00:00Z').getTime() + 86400000;
-    if (Date.now() > flightDateEnd) {
-      dbDeleteWatch(row.id);
-      continue;
+async function loadWatchesFromDB() {
+  try {
+    const { rows } = await pool.query("SELECT * FROM watches");
+    let restored = 0;
+    for (const row of rows) {
+      const flightDateEnd = new Date(row.date + 'T12:00:00Z').getTime() + 86400000;
+      if (Date.now() > flightDateEnd) {
+        await dbDeleteWatch(row.id);
+        continue;
+      }
+      const watchData = { flightNumber: row.flight_number, date: row.date, phone: row.phone, lastRisk: row.last_risk, startedAt: row.started_at };
+      watchedFlights.set(row.id, watchData);
+      startWatchJob(row.id, row.flight_number, row.date, row.phone);
+      restored++;
     }
-    const watchData = { flightNumber: row.flight_number, date: row.date, phone: row.phone, lastRisk: row.last_risk, startedAt: row.started_at };
-    watchedFlights.set(row.id, watchData);
-    startWatchJob(row.id, row.flight_number, row.date, row.phone);
-    restored++;
+    if (restored > 0) console.log(`[DB] Restored ${restored} active watch(es) from database`);
+  } catch (err) {
+    console.error("[DB] Failed to restore watches:", err.message);
   }
-  if (restored > 0) console.log(`[DB] Restored ${restored} active watch(es) from database`);
 }
 
 app.get("/api/flight/:flightNumber", async (req, res) => {
@@ -266,7 +278,7 @@ app.post("/api/watch", async (req, res) => {
     const watchId = `${flightNumber}-${date}-${Date.now()}`;
     const watchData = { flightNumber, date, phone, lastRisk: null, startedAt: new Date().toISOString() };
     watchedFlights.set(watchId, watchData);
-    dbSaveWatch(watchId, watchData);
+    await dbSaveWatch(watchId, watchData);
     const result = await checkFlight(flightNumber.toUpperCase(), date, phone, watchId);
     startWatchJob(watchId, flightNumber, date, phone);
     if (phone) await sendSMS(phone, `FlightWatch activated for ${flightNumber} on ${date}. You'll get alerts if a delay is likely.`);
@@ -276,11 +288,11 @@ app.post("/api/watch", async (req, res) => {
   }
 });
 
-app.delete("/api/watch/:watchId", (req, res) => {
+app.delete("/api/watch/:watchId", async (req, res) => {
   const job = activeCronJobs.get(req.params.watchId);
   if (job) { job.stop(); activeCronJobs.delete(req.params.watchId); }
   watchedFlights.delete(req.params.watchId);
-  dbDeleteWatch(req.params.watchId);
+  await dbDeleteWatch(req.params.watchId);
   res.json({ success: true, message: "Watch stopped" });
 });
 
@@ -318,7 +330,12 @@ app.use(express.static(distPath));
 app.get("*", (req, res) => res.sendFile(path.join(distPath, "index.html")));
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`FlightWatch server running on port ${PORT}`);
-  loadWatchesFromDB();
+  if (process.env.DATABASE_URL) {
+    await initDB();
+    await loadWatchesFromDB();
+  } else {
+    console.warn("[DB] DATABASE_URL not set — watches will not persist across restarts");
+  }
 });
