@@ -112,7 +112,23 @@ function analyzeRisk(flight, inbound) {
     risk = "delay_likely";
     message = `DELAY LIKELY: Inbound ${inbound.ident} arrives ${formatTime(estimatedArr)}, only ${Math.round(gapMinutes)} min before departure — not enough for ${turnaround} min turnaround.`;
   }
-  return { risk, message, gapMinutes: Math.round(gapMinutes), bufferMinutes: Math.round(bufferMinutes), turnaroundMinutes: turnaround, inboundETA: estimatedArr.toISOString() };
+
+  // Tarmac delay check: inbound pushed back but hasn't taken off
+  let tarmacAlert = null;
+  if (inbound.actual_out && !inbound.actual_off) {
+    const tarmacMinutes = (Date.now() - new Date(inbound.actual_out)) / 60000;
+    if (tarmacMinutes >= 30 && risk !== "delay_likely") {
+      risk = "delay_likely";
+      message = `DELAY LIKELY: Inbound ${inbound.ident} pushed back ${Math.round(tarmacMinutes)} min ago but hasn't taken off — possible tarmac hold.`;
+      tarmacAlert = "red";
+    } else if (tarmacMinutes >= 20 && risk === "safe") {
+      risk = "tight";
+      message = `Inbound ${inbound.ident} pushed back ${Math.round(tarmacMinutes)} min ago with no takeoff yet — possible tarmac delay.`;
+      tarmacAlert = "amber";
+    }
+  }
+
+  return { risk, message, gapMinutes: Math.round(gapMinutes), bufferMinutes: Math.round(bufferMinutes), turnaroundMinutes: turnaround, inboundETA: estimatedArr.toISOString(), tarmacAlert };
 }
 
 function formatTime(date) {
