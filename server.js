@@ -98,9 +98,9 @@ function trackApiCall(endpoint) {
 // AC flights can be operated by mainline (ACA), Rouge (ROU), or Jazz/Express (JZA)
 const AC_ICAO_CANDIDATES = ["ACA", "ROU", "JZA"];
 
-async function getFlightInfo(flightNumber, date, from = null) {
+// Returns all flights matching flightNumber on date (across all AC operators if applicable)
+async function findFlights(flightNumber, date) {
   const f = flightNumber.trim().toUpperCase();
-  // Build list of idents to try: if it looks like an IATA AC flight, try all AC operators
   const flightNum = f.replace(/^(ACA|ROU|JZA|AC)/, "");
   const candidates = f.startsWith("AC") && !f.match(/^(ACA|ROU|JZA)/)
     ? AC_ICAO_CANDIDATES.map(prefix => prefix + flightNum)
@@ -112,6 +112,7 @@ async function getFlightInfo(flightNumber, date, from = null) {
   const end = new Date(date + 'T00:00:00Z');
   end.setTime(end.getTime() + 38 * 3600000);
 
+  const allMatching = [];
   for (const icao of candidates) {
     if (!trackApiCall(`/flights/${icao}`)) throw new Error("Budget limit reached");
     console.log(`[API] Trying ${icao} for ${date}`);
@@ -120,17 +121,18 @@ async function getFlightInfo(flightNumber, date, from = null) {
       params: { start: start.toISOString(), end: end.toISOString() }
     });
     const flights = response.data.flights || [];
-    // Filter to flights departing on the correct local date at origin airport
     const matching = flights.filter(f => {
       const tz = f.origin?.timezone;
-      const dateMatch = !tz || !f.scheduled_out ||
+      return !tz || !f.scheduled_out ||
         new Date(f.scheduled_out).toLocaleDateString('en-CA', { timeZone: tz }) === date;
-      const fromMatch = !from || f.origin?.code_iata === from.toUpperCase();
-      return dateMatch && fromMatch;
     });
-    if (matching.length) return matching[0];
+    allMatching.push(...matching);
+    // AC operators are mutually exclusive — stop at first one with results
+    if (f.startsWith("AC") && matching.length) break;
   }
-  throw new Error(`No flights found for ${flightNumber} on ${date}`);
+
+  if (allMatching.length === 0) throw new Error(`No flights found for ${flightNumber} on ${date}`);
+  return allMatching;
 }
 
 async function getInboundFlight(inboundFaFlightId) {
@@ -195,7 +197,8 @@ async function sendSMS(to, message) {
 
 async function checkFlight(flightNumber, date, phone, watchId) {
   try {
-    const flight = await getFlightInfo(flightNumber, date);
+    const matches = await findFlights(flightNumber, date);
+    const flight = matches[0];
     let inbound = null;
     if (flight.inbound_fa_flight_id) inbound = await getInboundFlight(flight.inbound_fa_flight_id);
     const analysis = analyzeRisk(flight, inbound);
@@ -272,7 +275,27 @@ app.get("/api/flight/:flightNumber", async (req, res) => {
     const { flightNumber } = req.params;
     const { date, from } = req.query;
     const flightDate = date || new Date().toISOString().split("T")[0];
-    const flight = await getFlightInfo(flightNumber.toUpperCase(), flightDate, from || null);
+    const matches = await findFlights(flightNumber.toUpperCase(), flightDate);
+
+    // Apply FROM filter if user selected from disambiguation
+    let pool = from ? matches.filter(f => f.origin?.code_iata === from.toUpperCase()) : matches;
+    if (pool.length === 0) pool = matches; // FROM didn't match anything, fall back
+
+    // Multiple flights — ask user to disambiguate
+    if (pool.length > 1) {
+      return res.json({
+        success: true,
+        ambiguous: true,
+        options: pool.map(f => ({
+          origin: f.origin?.code_iata,
+          destination: f.destination?.code_iata,
+          scheduledDeparture: f.scheduled_out,
+          timezone: f.origin?.timezone,
+        }))
+      });
+    }
+
+    const flight = pool[0];
     let inbound = null;
     if (flight.inbound_fa_flight_id) inbound = await getInboundFlight(flight.inbound_fa_flight_id);
     const analysis = analyzeRisk(flight, inbound);

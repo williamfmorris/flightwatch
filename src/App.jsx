@@ -242,8 +242,8 @@ function AccuracyTab() {
 
 export default function App() {
   const [query, setQuery] = useState("");
-  const [from, setFrom] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [ambiguous, setAmbiguous] = useState(null);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -252,20 +252,25 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("watch");
   const [budget, setBudget] = useState(null);
 
-  const handleSearch = async () => {
+  const handleSearch = async (from = null) => {
     const flight = query.trim().toUpperCase();
     if (!flight) return;
     setError("");
     setLoading(true);
     setResult(null);
+    setAmbiguous(null);
     try {
-      const fromParam = from.trim().toUpperCase();
-      const res = await fetch(`${API_BASE}/api/flight/${flight}?date=${date}${fromParam ? `&from=${fromParam}` : ""}`);
+      const url = `${API_BASE}/api/flight/${flight}?date=${date}${from ? `&from=${from}` : ""}`;
+      const res = await fetch(url);
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
-      setResult({ ...data, date });
-      setLastChecked(new Date());
-      setBudget({ used: data.apiCallCount, remaining: data.budgetRemaining });
+      if (data.ambiguous) {
+        setAmbiguous(data.options);
+      } else {
+        setResult({ ...data, date });
+        setLastChecked(new Date());
+        setBudget({ used: data.apiCallCount, remaining: data.budgetRemaining });
+      }
     } catch (err) {
       setError(err.message.includes("fetch") ? "Cannot connect to server. Is it running?" : err.message);
     } finally {
@@ -326,19 +331,34 @@ export default function App() {
               </p>
             </div>
 
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <div style={{ position: "relative", flex: 1, minWidth: 120 }}>
+            <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ position: "relative", flex: 1 }}>
                 <input value={query} onChange={e => setQuery(e.target.value.toUpperCase())} onKeyDown={e => e.key === "Enter" && handleSearch()} placeholder="e.g. AC123" maxLength={7}
                   style={{ width: "100%", padding: "14px 16px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, color: "#fff", fontSize: 18, fontFamily: "monospace", fontWeight: 700, outline: "none", letterSpacing: 2 }} />
               </div>
-              <input value={from} onChange={e => setFrom(e.target.value.toUpperCase())} onKeyDown={e => e.key === "Enter" && handleSearch()} placeholder="FROM" maxLength={3}
-                style={{ width: 72, padding: "14px 10px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, color: "#fff", fontSize: 14, fontFamily: "monospace", fontWeight: 700, outline: "none", letterSpacing: 2, textAlign: "center" }} />
               <input type="date" value={date} min={today} onChange={e => setDate(e.target.value)}
                 style={{ padding: "14px 12px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, color: "#aaa", fontSize: 13, outline: "none", colorScheme: "dark" }} />
-              <button onClick={handleSearch} style={{ padding: "14px 24px", background: "#00e5a0", border: "none", borderRadius: 10, color: "#000", fontSize: 13, fontWeight: 800, letterSpacing: 1.5, cursor: "pointer", whiteSpace: "nowrap" }}>
+              <button onClick={() => handleSearch()} style={{ padding: "14px 24px", background: "#00e5a0", border: "none", borderRadius: 10, color: "#000", fontSize: 13, fontWeight: 800, letterSpacing: 1.5, cursor: "pointer", whiteSpace: "nowrap" }}>
                 CHECK
               </button>
             </div>
+
+            {ambiguous && !loading && (
+              <div style={{ marginTop: 20, padding: "20px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10 }}>
+                <div style={{ fontSize: 11, letterSpacing: 2, color: "#555", marginBottom: 14 }}>MULTIPLE FLIGHTS FOUND — WHICH ONE?</div>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  {ambiguous.map(opt => (
+                    <button key={opt.origin} onClick={() => handleSearch(opt.origin)}
+                      style={{ padding: "12px 20px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, color: "#fff", fontSize: 13, fontFamily: "monospace", fontWeight: 700, cursor: "pointer", letterSpacing: 1 }}>
+                      {opt.origin} → {opt.destination}
+                      <span style={{ display: "block", fontSize: 11, color: "#888", fontWeight: 400, marginTop: 3 }}>
+                        {formatTime(opt.scheduledDeparture, opt.timezone)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {loading && (
               <div style={{ textAlign: "center", padding: "48px 0" }}>
