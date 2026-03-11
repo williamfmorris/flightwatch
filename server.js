@@ -106,18 +106,27 @@ async function getFlightInfo(flightNumber, date) {
     ? AC_ICAO_CANDIDATES.map(prefix => prefix + flightNum)
     : [f];
 
-  const startET = new Date(date + 'T05:00:00Z');
-  const endET   = new Date(startET.getTime() + 86400000);
+  // Wide window covering any timezone (UTC-14 to UTC+14)
+  const start = new Date(date + 'T00:00:00Z');
+  start.setTime(start.getTime() - 14 * 3600000);
+  const end = new Date(date + 'T00:00:00Z');
+  end.setTime(end.getTime() + 38 * 3600000);
 
   for (const icao of candidates) {
     if (!trackApiCall(`/flights/${icao}`)) throw new Error("Budget limit reached");
     console.log(`[API] Trying ${icao} for ${date}`);
     const response = await axios.get(`${FLIGHTAWARE_BASE}/flights/${icao}`, {
       headers: { "x-apikey": FLIGHTAWARE_API_KEY },
-      params: { start: startET.toISOString(), end: endET.toISOString() }
+      params: { start: start.toISOString(), end: end.toISOString() }
     });
     const flights = response.data.flights || [];
-    if (flights.length) return flights[0];
+    // Filter to flights departing on the correct local date at origin airport
+    const matching = flights.filter(f => {
+      const tz = f.origin?.timezone;
+      if (!tz || !f.scheduled_out) return true;
+      return new Date(f.scheduled_out).toLocaleDateString('en-CA', { timeZone: tz }) === date;
+    });
+    if (matching.length) return matching[0];
   }
   throw new Error(`No flights found for ${flightNumber} on ${date}`);
 }
@@ -265,7 +274,7 @@ app.get("/api/flight/:flightNumber", async (req, res) => {
     let inbound = null;
     if (flight.inbound_fa_flight_id) inbound = await getInboundFlight(flight.inbound_fa_flight_id);
     const analysis = analyzeRisk(flight, inbound);
-    res.json({ success: true, flightNumber: flight.ident, route: `${flight.origin?.code_iata} → ${flight.destination?.code_iata}`, scheduledDeparture: flight.scheduled_out, estimatedDeparture: flight.estimated_out, actualDeparture: flight.actual_out, gate: flight.gate_origin, status: flight.status, timezone: flight.origin?.timezone, inbound: inbound ? { flightNumber: inbound.ident, origin: inbound.origin?.code_iata, scheduledArrival: inbound.scheduled_in, estimatedArrival: inbound.estimated_in, actualArrival: inbound.actual_in, departed: !!inbound.actual_off, departedAt: inbound.actual_off, progressPercent: inbound.progress_percent } : null, analysis, apiCallCount, budgetRemaining: BUDGET_LIMIT - apiCallCount });
+    res.json({ success: true, flightNumber: flightNumber.toUpperCase(), route: `${flight.origin?.code_iata} → ${flight.destination?.code_iata}`, scheduledDeparture: flight.scheduled_out, estimatedDeparture: flight.estimated_out, actualDeparture: flight.actual_out, gate: flight.gate_origin, status: flight.status, timezone: flight.origin?.timezone, inbound: inbound ? { flightNumber: inbound.ident, origin: inbound.origin?.code_iata, scheduledArrival: inbound.scheduled_in, estimatedArrival: inbound.estimated_in, actualArrival: inbound.actual_in, departed: !!inbound.actual_off, departedAt: inbound.actual_off, progressPercent: inbound.progress_percent } : null, analysis, apiCallCount, budgetRemaining: BUDGET_LIMIT - apiCallCount });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
