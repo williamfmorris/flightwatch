@@ -218,7 +218,7 @@ function AccuracyTab() {
     <div style={{ animation: "fadeIn 0.3s ease" }}>
       <div style={{ marginBottom: 32 }}>
         <h1 style={{ fontSize: 32, fontWeight: 800, color: "#fff", lineHeight: 1.15, letterSpacing: -1 }}>
-          Hold Air Canada<br /><span style={{ color: "#f5c518" }}>accountable.</span>
+          Hold airlines<br /><span style={{ color: "#f5c518" }}>accountable.</span>
         </h1>
         <p style={{ marginTop: 12, fontSize: 14, color: "#555", lineHeight: 1.7 }}>ETD accuracy tracked across routes. Every flight you check contributes to this dataset.</p>
       </div>
@@ -252,8 +252,8 @@ export default function App() {
   const [budget, setBudget] = useState(null);
 
   const handleSearch = async () => {
-    const flight = "AC" + query.replace(/[^0-9]/g, "").trim();
-    if (!query) return;
+    const flight = query.trim().toUpperCase();
+    if (!flight) return;
     setError("");
     setLoading(true);
     setResult(null);
@@ -293,7 +293,7 @@ export default function App() {
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span style={{ fontSize: 18 }}>✈</span>
             <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: 2, color: "#fff" }}>FLIGHTWATCH</span>
-            <span style={{ fontSize: 10, letterSpacing: 1, color: "#444" }}>FOR AIR CANADA</span>
+            <span style={{ fontSize: 10, letterSpacing: 1, color: "#444" }}>FLIGHT DELAY RISK</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             {budget && (
@@ -326,9 +326,8 @@ export default function App() {
 
             <div style={{ display: "flex", gap: 8 }}>
               <div style={{ position: "relative", flex: 1 }}>
-                <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "#555", fontFamily: "monospace", fontWeight: 700 }}>AC</span>
-                <input value={query} onChange={e => setQuery(e.target.value.replace(/[^0-9]/g, ""))} onKeyDown={e => e.key === "Enter" && handleSearch()} placeholder="123" maxLength={5}
-                  style={{ width: "100%", padding: "14px 16px 14px 38px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, color: "#fff", fontSize: 18, fontFamily: "monospace", fontWeight: 700, outline: "none", letterSpacing: 2 }} />
+                <input value={query} onChange={e => setQuery(e.target.value.toUpperCase())} onKeyDown={e => e.key === "Enter" && handleSearch()} placeholder="AC123" maxLength={7}
+                  style={{ width: "100%", padding: "14px 16px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, color: "#fff", fontSize: 18, fontFamily: "monospace", fontWeight: 700, outline: "none", letterSpacing: 2 }} />
               </div>
               <input type="date" value={date} min={today} onChange={e => setDate(e.target.value)}
                 style={{ padding: "14px 12px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, color: "#aaa", fontSize: 13, outline: "none", colorScheme: "dark" }} />
