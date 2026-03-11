@@ -1,4 +1,4 @@
-const CACHE = 'flightwatch-v1';
+const CACHE = 'flightwatch-v2';
 
 self.addEventListener('install', e => {
   self.skipWaiting();

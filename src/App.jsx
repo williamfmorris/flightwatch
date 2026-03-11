@@ -326,7 +326,7 @@ export default function App() {
 
             <div style={{ display: "flex", gap: 8 }}>
               <div style={{ position: "relative", flex: 1 }}>
-                <input value={query} onChange={e => setQuery(e.target.value.toUpperCase())} onKeyDown={e => e.key === "Enter" && handleSearch()} placeholder="AC123" maxLength={7}
+                <input value={query} onChange={e => setQuery(e.target.value.toUpperCase())} onKeyDown={e => e.key === "Enter" && handleSearch()} placeholder="e.g. AC123" maxLength={7}
                   style={{ width: "100%", padding: "14px 16px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, color: "#fff", fontSize: 18, fontFamily: "monospace", fontWeight: 700, outline: "none", letterSpacing: 2 }} />
               </div>
               <input type="date" value={date} min={today} onChange={e => setDate(e.target.value)}
