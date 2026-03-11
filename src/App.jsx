@@ -242,6 +242,7 @@ function AccuracyTab() {
 
 export default function App() {
   const [query, setQuery] = useState("");
+  const [from, setFrom] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -258,7 +259,8 @@ export default function App() {
     setLoading(true);
     setResult(null);
     try {
-      const res = await fetch(`${API_BASE}/api/flight/${flight}?date=${date}`);
+      const fromParam = from.trim().toUpperCase();
+      const res = await fetch(`${API_BASE}/api/flight/${flight}?date=${date}${fromParam ? `&from=${fromParam}` : ""}`);
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
       setResult({ ...data, date });
@@ -324,11 +326,13 @@ export default function App() {
               </p>
             </div>
 
-            <div style={{ display: "flex", gap: 8 }}>
-              <div style={{ position: "relative", flex: 1 }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <div style={{ position: "relative", flex: 1, minWidth: 120 }}>
                 <input value={query} onChange={e => setQuery(e.target.value.toUpperCase())} onKeyDown={e => e.key === "Enter" && handleSearch()} placeholder="e.g. AC123" maxLength={7}
                   style={{ width: "100%", padding: "14px 16px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, color: "#fff", fontSize: 18, fontFamily: "monospace", fontWeight: 700, outline: "none", letterSpacing: 2 }} />
               </div>
+              <input value={from} onChange={e => setFrom(e.target.value.toUpperCase())} onKeyDown={e => e.key === "Enter" && handleSearch()} placeholder="FROM" maxLength={3}
+                style={{ width: 72, padding: "14px 10px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, color: "#fff", fontSize: 14, fontFamily: "monospace", fontWeight: 700, outline: "none", letterSpacing: 2, textAlign: "center" }} />
               <input type="date" value={date} min={today} onChange={e => setDate(e.target.value)}
                 style={{ padding: "14px 12px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, color: "#aaa", fontSize: 13, outline: "none", colorScheme: "dark" }} />
               <button onClick={handleSearch} style={{ padding: "14px 24px", background: "#00e5a0", border: "none", borderRadius: 10, color: "#000", fontSize: 13, fontWeight: 800, letterSpacing: 1.5, cursor: "pointer", whiteSpace: "nowrap" }}>

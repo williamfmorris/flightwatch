@@ -98,7 +98,7 @@ function trackApiCall(endpoint) {
 // AC flights can be operated by mainline (ACA), Rouge (ROU), or Jazz/Express (JZA)
 const AC_ICAO_CANDIDATES = ["ACA", "ROU", "JZA"];
 
-async function getFlightInfo(flightNumber, date) {
+async function getFlightInfo(flightNumber, date, from = null) {
   const f = flightNumber.trim().toUpperCase();
   // Build list of idents to try: if it looks like an IATA AC flight, try all AC operators
   const flightNum = f.replace(/^(ACA|ROU|JZA|AC)/, "");
@@ -123,8 +123,10 @@ async function getFlightInfo(flightNumber, date) {
     // Filter to flights departing on the correct local date at origin airport
     const matching = flights.filter(f => {
       const tz = f.origin?.timezone;
-      if (!tz || !f.scheduled_out) return true;
-      return new Date(f.scheduled_out).toLocaleDateString('en-CA', { timeZone: tz }) === date;
+      const dateMatch = !tz || !f.scheduled_out ||
+        new Date(f.scheduled_out).toLocaleDateString('en-CA', { timeZone: tz }) === date;
+      const fromMatch = !from || f.origin?.code_iata === from.toUpperCase();
+      return dateMatch && fromMatch;
     });
     if (matching.length) return matching[0];
   }
@@ -268,9 +270,9 @@ async function loadWatchesFromDB() {
 app.get("/api/flight/:flightNumber", async (req, res) => {
   try {
     const { flightNumber } = req.params;
-    const { date } = req.query;
+    const { date, from } = req.query;
     const flightDate = date || new Date().toISOString().split("T")[0];
-    const flight = await getFlightInfo(flightNumber.toUpperCase(), flightDate);
+    const flight = await getFlightInfo(flightNumber.toUpperCase(), flightDate, from || null);
     let inbound = null;
     if (flight.inbound_fa_flight_id) inbound = await getInboundFlight(flight.inbound_fa_flight_id);
     const analysis = analyzeRisk(flight, inbound);
