@@ -100,7 +100,7 @@ const AC_ICAO_CANDIDATES = ["ACA", "ROU", "JZA"];
 
 // Returns all flights matching flightNumber on date (across all AC operators if applicable)
 async function findFlights(flightNumber, date) {
-  const f = flightNumber.trim().toUpperCase();
+  const f = flightNumber.trim().toUpperCase().replace(/\s/g, "");
   const flightNum = f.replace(/^(ACA|ROU|JZA|AC)/, "");
   const candidates = f.startsWith("AC") && !f.match(/^(ACA|ROU|JZA)/)
     ? AC_ICAO_CANDIDATES.map(prefix => prefix + flightNum)
