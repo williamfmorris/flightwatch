@@ -152,7 +152,8 @@ function SMSModal({ flightData, onClose }) {
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
-      setSent(true);
+      if (data.alreadyWatching) setError("Already watching this flight for this number.");
+      else setSent(true);
     } catch (err) {
       setError(err.message);
     } finally {

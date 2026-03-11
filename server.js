@@ -275,6 +275,13 @@ app.post("/api/watch", async (req, res) => {
   try {
     const { flightNumber, date, phone } = req.body;
     if (!flightNumber || !date) return res.status(400).json({ error: "flightNumber and date required" });
+
+    // Prevent duplicate watches for same flight+date+phone
+    const existing = Array.from(watchedFlights.values()).find(
+      w => w.flightNumber === flightNumber && w.date === date && w.phone === phone
+    );
+    if (existing) return res.json({ success: true, alreadyWatching: true });
+
     const watchId = `${flightNumber}-${date}-${Date.now()}`;
     const watchData = { flightNumber, date, phone, lastRisk: null, startedAt: new Date().toISOString() };
     watchedFlights.set(watchId, watchData);
