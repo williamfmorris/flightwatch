@@ -148,7 +148,7 @@ function analyzeRisk(flight, inbound) {
   if (!inbound) return { risk: "unknown", message: "Could not determine inbound flight" };
   const aircraftType = flight.aircraft_type?.toUpperCase();
   const turnaround = TURNAROUND_BY_AIRCRAFT[aircraftType] ?? TURNAROUND_MINUTES;
-  const scheduledDep = new Date(flight.scheduled_out);
+  const scheduledDep = new Date(flight.estimated_out || flight.scheduled_out);
   const estimatedArr = new Date(inbound.estimated_in || inbound.scheduled_in);
   const gapMinutes = (scheduledDep - estimatedArr) / 60000;
   const bufferMinutes = gapMinutes - turnaround;
