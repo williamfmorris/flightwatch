@@ -147,7 +147,16 @@ async function getInboundFlight(inboundFaFlightId) {
 function analyzeRisk(flight, inbound) {
   if (!inbound) return { risk: "unknown", message: "Could not determine inbound flight" };
   const aircraftType = flight.aircraft_type?.toUpperCase();
-  const turnaround = TURNAROUND_BY_AIRCRAFT[aircraftType] ?? TURNAROUND_MINUTES;
+  const baseTurnaround = TURNAROUND_BY_AIRCRAFT[aircraftType] ?? TURNAROUND_MINUTES;
+
+  // Gate mismatch: add 20 min if inbound arrives at a different gate than outbound departs from
+  const outboundGate = flight.gate_origin;
+  const inboundGate = inbound.gate_destination;
+  const gateMismatch = !!(outboundGate && inboundGate && outboundGate !== inboundGate);
+  const turnaround = gateMismatch ? baseTurnaround + 20 : baseTurnaround;
+  const gateNote = gateMismatch ? ` (gate change: arrives ${inboundGate}, departs ${outboundGate})` : "";
+
+  const inboundOrigin = inbound.origin?.code_iata ? ` from ${inbound.origin.code_iata}` : "";
   const scheduledDep = new Date(flight.estimated_out || flight.scheduled_out);
   const estimatedArr = new Date(inbound.estimated_in || inbound.scheduled_in);
   const gapMinutes = (scheduledDep - estimatedArr) / 60000;
@@ -155,13 +164,13 @@ function analyzeRisk(flight, inbound) {
   let risk, message;
   if (bufferMinutes >= 15) {
     risk = "safe";
-    message = `Inbound ${inbound.ident} arrives ${formatTime(estimatedArr)}, leaving ${Math.round(bufferMinutes)} min buffer after turnaround.`;
+    message = `Inbound ${inbound.ident}${inboundOrigin} arrives ${formatTime(estimatedArr)}${gateNote}, leaving ${Math.round(bufferMinutes)} min buffer after turnaround.`;
   } else if (bufferMinutes >= 0) {
     risk = "tight";
-    message = `Inbound ${inbound.ident} arrives ${formatTime(estimatedArr)}. Only ${Math.round(bufferMinutes)} min buffer — could be tight.`;
+    message = `Inbound ${inbound.ident}${inboundOrigin} arrives ${formatTime(estimatedArr)}${gateNote}. Recommend ${turnaround} min buffer, gap is ${Math.round(gapMinutes)} min — could be tight.`;
   } else {
     risk = "delay_likely";
-    message = `DELAY LIKELY: Inbound ${inbound.ident} arrives ${formatTime(estimatedArr)}, only ${Math.round(gapMinutes)} min before departure — not enough for ${turnaround} min turnaround.`;
+    message = `DELAY LIKELY: Inbound ${inbound.ident}${inboundOrigin} arrives ${formatTime(estimatedArr)}${gateNote}, only ${Math.round(gapMinutes)} min before departure — not enough for ${turnaround} min turnaround.`;
   }
 
   // Tarmac delay check: inbound pushed back but hasn't taken off
@@ -170,16 +179,16 @@ function analyzeRisk(flight, inbound) {
     const tarmacMinutes = (Date.now() - new Date(inbound.actual_out)) / 60000;
     if (tarmacMinutes >= 30 && risk !== "delay_likely") {
       risk = "delay_likely";
-      message = `DELAY LIKELY: Inbound ${inbound.ident} pushed back ${Math.round(tarmacMinutes)} min ago but hasn't taken off — possible tarmac hold.`;
+      message = `DELAY LIKELY: Inbound ${inbound.ident}${inboundOrigin} pushed back ${Math.round(tarmacMinutes)} min ago but hasn't taken off — possible tarmac hold.`;
       tarmacAlert = "red";
     } else if (tarmacMinutes >= 20 && risk === "safe") {
       risk = "tight";
-      message = `Inbound ${inbound.ident} pushed back ${Math.round(tarmacMinutes)} min ago with no takeoff yet — possible tarmac delay.`;
+      message = `Inbound ${inbound.ident}${inboundOrigin} pushed back ${Math.round(tarmacMinutes)} min ago with no takeoff yet — possible tarmac delay.`;
       tarmacAlert = "amber";
     }
   }
 
-  return { risk, message, gapMinutes: Math.round(gapMinutes), bufferMinutes: Math.round(bufferMinutes), turnaroundMinutes: turnaround, inboundETA: estimatedArr.toISOString(), tarmacAlert };
+  return { risk, message, gapMinutes: Math.round(gapMinutes), bufferMinutes: Math.round(bufferMinutes), turnaroundMinutes: turnaround, gateMismatch, inboundETA: estimatedArr.toISOString(), tarmacAlert };
 }
 
 function formatTime(date) {
